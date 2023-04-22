@@ -1,5 +1,4 @@
 #include "plugin.h"
-#include "CStyle.h"
 #include "GBH.h"
 #include "CTextureManager.h"
 #include "CSprite2D.h"
@@ -18,25 +17,24 @@ using namespace plugin;
 
 class TextureLoaderII {
 public:
-    static inline injector::hook_back<void(__stdcall*)(tHardwareTexture*)> setTextureHookBack;
-    static inline int textureIndex = -1;
-    static inline int spriteIndex = -1;
+    static inline injector::hook_back<int(__stdcall*)(tHardwareTexture*)> setTextureHookBack;
+    static inline unsigned short textureIndex = -1;
+    static inline unsigned short spriteIndex = -1;
 
     static inline CSprite2d* textures = {};
     static inline CSprite2d* sprites = {};
 
     inline enum {
-        NUM_TILES = 1024,
+        NUM_TILES = 992, // 1024,
         NUM_SPRITES = 2048
     };
 
-    static inline void __stdcall SetTexture(tHardwareTexture* hwTexture) {
+    static inline int __stdcall SetTexture(tHardwareTexture* hwTexture) {
         void* texture = nullptr;
 
         if (textureIndex != -1 && textureIndex < NUM_TILES)
             texture = textures[textureIndex].m_pTexture;
-
-        if (spriteIndex != -1 && spriteIndex < NUM_SPRITES)
+        else if (spriteIndex != -1 && spriteIndex < NUM_SPRITES)
             texture = sprites[spriteIndex].m_pTexture;
 
         textureIndex = -1;
@@ -44,10 +42,10 @@ public:
 
         if (texture) {
             RenderStateSet(D3DRENDERSTATE_TEXTUREHANDLE, texture);
-            return;
+            return 0;
         }
 
-        setTextureHookBack.fun(hwTexture);
+        return setTextureHookBack.fun(hwTexture);
     }
 
     static inline void Shutdown() {
@@ -94,17 +92,6 @@ public:
         for (int i = 0; i < NUM_SPRITES; i++) {
             sprintf(buff, "%s/GTA2_SPRITE_%d.dds", folder2, i);
             sprites[i].SetTexture(buff);
-
-            //auto a = D3DTextr_GetSurface(buff);
-            //if (a) {
-            //    DDSURFACEDESC2 desc;
-            //    a->GetSurfaceDesc(&desc);
-            //
-            //    int h = GetCurrentStyle()->m_pSpriteIndex[i].height;
-            //    h = pow(2, ceil(log(h) / log(2)));
-            //    GetCurrentStyle()->m_pSpriteIndex[i].width = h;
-            //    GetCurrentStyle()->m_pSpriteIndex[i].height = h;
-            //}
         }
     }
 
@@ -141,6 +128,7 @@ public:
                 0x4709B4, H_CALL>, PRIORITY_AFTER, ArgPick2N<CTextureManager*, 0, unsigned short*, 1>, void(CTextureManager*, unsigned short*)> onGetTexture;
             onGetTexture += [](CTextureManager* _this, unsigned short* id) {
                 textureIndex = *id;
+                spriteIndex = -1;
             };
 
             ThiscallEvent <AddressList<
@@ -152,24 +140,22 @@ public:
             onGetSprite += [](CTextureManager* _this, int base, int texture, int mode, int enableAlpha) {
                 if (GetFrontendMenuManager())
                     return;
-                
-                if (mode == 2) {
-                    spriteIndex = GetCurrentStyle()->GetBaseIndex(base, texture);
-                    textureIndex = -1;
 
-                    double w = GetCurrentStyle()->m_pSpriteIndex[spriteIndex].width;
-                    w = pow(2, ceil(log(w) / log(2)));
+                spriteIndex = GetCurrentStyle()->GetBaseIndex(base, texture);
+                textureIndex = -1;
 
-                    double h = GetCurrentStyle()->m_pSpriteIndex[spriteIndex].height;
-                    h = pow(2, ceil(log(h) / log(2)));
+                double w = GetCurrentStyle()->m_pSpriteIndex[spriteIndex].width;
+                w = pow(2, ceil(log(w) / log(2)));
 
-                    // Little hack for uv
-                    if (void* t = sprites[spriteIndex].m_pTexture) {
-                        *(float*)0x673428 = w - 0.000099999997;
-                        *(float*)0x673448 = *(float*)0x673428;
-                        *(float*)0x67344C = h - 0.000099999997;
-                        *(float*)0x67346C = *(float*)0x67344C;
-                    }
+                double h = GetCurrentStyle()->m_pSpriteIndex[spriteIndex].height;
+                h = pow(2, ceil(log(h) / log(2)));
+
+                // Little hack for uv
+                if (void* t = sprites[spriteIndex].m_pTexture) {
+                    *(float*)0x673428 = w - 0.000099999997;
+                    *(float*)0x673448 = *(float*)0x673428;
+                    *(float*)0x67344C = h - 0.000099999997;
+                    *(float*)0x67346C = *(float*)0x67344C;
                 }
             };
 
